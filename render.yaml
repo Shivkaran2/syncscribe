@@ -1,0 +1,30 @@
+services:
+  # 1. Next.js Web App
+  - type: web
+    name: syncdoc-web
+    env: node
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: AUTH_URL
+        sync: false # Set to your deployed Next.js Render URL
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false # Set to your deployed Next.js Render URL
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false # Set to your deployed WebSocket Render URL (wss://...)
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+
+  # 2. Hocuspocus WebSocket Server
+  - type: web
+    name: syncdoc-websocket
+    env: node
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run wsserver
+    envVars:
+      - key: DATABASE_URL
+        sync: false
