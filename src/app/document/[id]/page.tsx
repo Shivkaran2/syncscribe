@@ -23,6 +23,8 @@ import SyncStatusIndicator from "@/components/editor/SyncStatus";
 import VersionPanel from "@/components/editor/VersionPanel";
 import ShareModal from "@/components/editor/ShareModal";
 import AIAssistant from "@/components/editor/AIAssistant";
+import { getDocument, updateDocumentTitle } from "@/lib/actions/documents";
+import { createVersion as createVersionAction } from "@/lib/actions/versions";
 import {
   ArrowLeft,
   Save,
@@ -120,14 +122,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     if (status === "authenticated") {
       const fetchDoc = async () => {
         try {
-          const res = await fetch(`/api/documents/${id}`);
+          const res = await getDocument(id);
           if (!res.ok) {
             router.push("/dashboard");
             return;
           }
-          const data = await res.json();
-          setDocument(data);
-          setTitle(data.title);
+          setDocument(res.data);
+          setTitle(res.data.title);
         } catch (error) {
           console.error("Failed to fetch document:", error);
           router.push("/dashboard");
@@ -151,11 +152,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     if (!title.trim() || title === document?.title) return;
     setTitleSaving(true);
     try {
-      await fetch(`/api/documents/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
+      await updateDocumentTitle(id, title);
     } catch (error) {
       console.error("Failed to save title:", error);
     } finally {
@@ -170,13 +167,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       // Push latest state first
       await pushToServer();
 
-      const res = await fetch(`/api/documents/${id}/versions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: `Manual snapshot`,
-          title: title,
-        }),
+      const res = await createVersionAction(id, {
+        description: `Manual snapshot`,
+        title: title,
       });
 
       if (res.ok) {
@@ -387,9 +380,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             documentId={id}
             canEdit={canEdit || false}
             onClose={() => setShowVersions(false)}
-            onRestore={() => {
-              // Reload document state
-              window.location.reload();
+            onRestore={(html) => {
+              // Apply the restored content to the live editor. This mutates the
+              // shared Yjs doc (delete + insert), which syncs to the server and
+              // other collaborators — unlike overwriting server state, which a
+              // CRDT would simply re-merge away.
+              if (editor) {
+                editor.commands.setContent(html);
+                editor.commands.focus("end");
+              }
             }}
           />
         )}

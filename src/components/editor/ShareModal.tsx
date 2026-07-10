@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { X, Mail, UserPlus, Trash2, Loader2, Shield } from "lucide-react";
 import { getInitials } from "@/lib/utils";
+import {
+  listPermissions,
+  shareDocument,
+  removePermission as removePermissionAction,
+} from "@/lib/actions/permissions";
 
 interface Permission {
   id: string;
@@ -27,8 +32,8 @@ export default function ShareModal({ documentId, onClose }: ShareModalProps) {
   useEffect(() => {
     const fetchPerms = async () => {
       try {
-        const res = await fetch(`/api/documents/${documentId}/permissions`);
-        if (res.ok) setPermissions(await res.json());
+        const res = await listPermissions(documentId);
+        if (res.ok) setPermissions(res.data);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -39,16 +44,14 @@ export default function ShareModal({ documentId, onClose }: ShareModalProps) {
     e.preventDefault();
     setError(""); setSuccess(""); setSharing(true);
     try {
-      const res = await fetch(`/api/documents/${documentId}/permissions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
+      const res = await shareDocument(documentId, { email, role });
+      if (!res.ok) { setError(res.error); return; }
+      setPermissions(prev => {
+        const others = prev.filter(p => p.user.id !== res.data.user.id);
+        return [...others, res.data];
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      setPermissions(prev => [...prev, data]);
       setEmail("");
-      setSuccess(`Shared with ${data.user.name}`);
+      setSuccess(`Shared with ${res.data.user.name}`);
       setTimeout(() => setSuccess(""), 3000);
     } catch { setError("Failed to share"); }
     finally { setSharing(false); }
@@ -56,7 +59,7 @@ export default function ShareModal({ documentId, onClose }: ShareModalProps) {
 
   const removePermission = async (userId: string) => {
     try {
-      const res = await fetch(`/api/documents/${documentId}/permissions?userId=${userId}`, { method: "DELETE" });
+      const res = await removePermissionAction(documentId, userId);
       if (res.ok) setPermissions(prev => prev.filter(p => p.user.id !== userId));
     } catch (e) { console.error(e); }
   };

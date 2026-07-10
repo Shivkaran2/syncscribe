@@ -19,6 +19,11 @@ import {
 } from "lucide-react";
 import { formatRelativeTime, getInitials } from "@/lib/utils";
 import { DocumentWithPermissions } from "@/types";
+import {
+  listDocuments,
+  createDocument as createDocumentAction,
+  deleteDocument as deleteDocumentAction,
+} from "@/lib/actions/documents";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -31,10 +36,9 @@ export default function DashboardPage() {
 
   const fetchDocuments = useCallback(async () => {
     try {
-      const res = await fetch("/api/documents");
+      const res = await listDocuments();
       if (res.ok) {
-        const data = await res.json();
-        setDocuments(data);
+        setDocuments(res.data);
       }
     } catch (error) {
       console.error("Failed to fetch documents:", error);
@@ -55,15 +59,9 @@ export default function DashboardPage() {
   const createDocument = async () => {
     setCreating(true);
     try {
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Untitled Document" }),
-      });
-
+      const res = await createDocumentAction("Untitled Document");
       if (res.ok) {
-        const doc = await res.json();
-        router.push(`/document/${doc.id}`);
+        router.push(`/document/${res.data.id}`);
       }
     } catch (error) {
       console.error("Failed to create document:", error);
@@ -74,7 +72,7 @@ export default function DashboardPage() {
 
   const deleteDocument = async (id: string) => {
     try {
-      const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      const res = await deleteDocumentAction(id);
       if (res.ok) {
         setDocuments((prev) => prev.filter((d) => d.id !== id));
       }

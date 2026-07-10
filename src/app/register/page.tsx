@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText, Mail, Lock, User, ArrowRight, Loader2, Check } from "lucide-react";
+import { registerUser } from "@/lib/actions/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -27,16 +28,10 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await res.json();
+      const res = await registerUser({ name, email, password });
 
       if (!res.ok) {
-        setError(data.error || "Registration failed");
+        setError(res.error || "Registration failed");
         return;
       }
 

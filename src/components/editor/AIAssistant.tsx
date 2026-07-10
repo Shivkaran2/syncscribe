@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Editor } from "@tiptap/react";
 import { X, Sparkles, Wand2, FileText, Expand, SpellCheck, Languages, HelpCircle, Loader2, ArrowRight, Copy, Check } from "lucide-react";
+import { runAiAction } from "@/lib/actions/ai";
+import type { AIActionInput } from "@/lib/validators";
 
 interface AIAssistantProps {
   editor: Editor;
@@ -37,14 +39,13 @@ export default function AIAssistant({ editor, onClose }: AIAssistantProps) {
 
     setLoading(true); setActiveAction(action); setResult(""); setError("");
     try {
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, text, language: action === "translate" ? language : undefined }),
+      const res = await runAiAction({
+        action: action as AIActionInput["action"],
+        text,
+        language: action === "translate" ? language : undefined,
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      setResult(data.result);
+      if (!res.ok) { setError(res.error); return; }
+      setResult(res.data.result);
     } catch { setError("AI service unavailable"); }
     finally { setLoading(false); }
   };

@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+"use server";
+
 import { auth } from "@/lib/auth";
 import { aiActionSchema } from "@/lib/validators";
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
+import type { ActionResult } from "@/lib/actions/types";
+import type { AIActionInput } from "@/lib/validators";
 
 const AI_PROMPTS: Record<string, string> = {
   improve:
@@ -21,55 +24,57 @@ const AI_PROMPTS: Record<string, string> = {
     "Explain the following text in simple terms, as if explaining to someone unfamiliar with the topic. Return only the explanation, nothing else.",
 };
 
-export async function POST(req: NextRequest) {
+export interface AIResult {
+  result: string;
+  action: string;
+  originalLength: number;
+  resultLength: number;
+}
+
+// Run an AI writing action on a selection of text.
+export async function runAiAction(
+  input: AIActionInput
+): Promise<ActionResult<AIResult>> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "Unauthorized" };
+
+  const parsed = aiActionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const { action, text, language } = parsed.data;
+
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    return {
+      ok: false,
+      error: "AI service is not configured. Please add a Gemini API key.",
+    };
+  }
+
+  let systemPrompt = AI_PROMPTS[action];
+  if (action === "translate" && language) {
+    systemPrompt = `Translate the following text to ${language}. Return only the translation, nothing else.`;
+  }
+
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const parsed = aiActionSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
-    }
-
-    const { action, text, language } = parsed.data;
-
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      return NextResponse.json(
-        { error: "AI service is not configured. Please add a Gemini API key." },
-        { status: 503 }
-      );
-    }
-
-    let systemPrompt = AI_PROMPTS[action];
-
-    if (action === "translate" && language) {
-      systemPrompt = `Translate the following text to ${language}. Return only the translation, nothing else.`;
-    }
-
     const { text: result } = await generateText({
       model: google("gemini-2.5-flash"),
       system: systemPrompt,
       prompt: text,
     });
 
-    return NextResponse.json({
-      result,
-      action,
-      originalLength: text.length,
-      resultLength: result.length,
-    });
+    return {
+      ok: true,
+      data: {
+        result,
+        action,
+        originalLength: text.length,
+        resultLength: result.length,
+      },
+    };
   } catch (error) {
     console.error("AI error:", error);
-    return NextResponse.json(
-      { error: "AI service error. Please try again." },
-      { status: 500 }
-    );
+    return { ok: false, error: "AI service error. Please try again." };
   }
 }
