@@ -1,7 +1,31 @@
+import fs from "node:fs";
+import path from "node:path";
+
+// This process runs outside Next.js, which means nothing loads `.env` for us.
+// Load it manually for local development; in hosted environments (Render) the
+// file is absent and the variables are injected into the process directly, so
+// this is skipped without failing.
+const envPath = path.resolve(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (!match) continue;
+    const key = match[1];
+    let value = (match[2] || "").trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    // Never override variables the host already provided.
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
 import { Server } from "@hocuspocus/server";
 import { Database } from "@hocuspocus/extension-database";
 import prisma from "../src/lib/prisma";
-import * as Y from "yjs";
 
 const server = new Server({
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 1234,
