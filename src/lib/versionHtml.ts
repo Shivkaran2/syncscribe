@@ -118,6 +118,41 @@ export function yDocSnapshotToHtml(snapshot: Uint8Array): string {
   }
 }
 
+/**
+ * Extract plain text from a Yjs snapshot, for the searchable `content` column
+ * and dashboard previews. Returns an empty string when the snapshot is empty.
+ */
+export function yDocSnapshotToPlainText(snapshot: Uint8Array): string {
+  if (!snapshot || snapshot.length === 0) return "";
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, snapshot);
+    const fragment = doc.getXmlFragment("default");
+    const blocks: string[] = [];
+    const walk = (node: Y.XmlElement | Y.XmlText | Y.XmlHook) => {
+      if (node instanceof Y.XmlText) {
+        // Use the delta, not toString() — toString() re-emits mark names as
+        // pseudo-tags (e.g. "<bold>text</bold>") which would pollute the text.
+        const delta = node.toDelta() as Array<{ insert?: unknown }>;
+        for (const op of delta) {
+          if (typeof op.insert === "string") blocks.push(op.insert);
+        }
+        return;
+      }
+      if (node instanceof Y.XmlElement) {
+        node.toArray().forEach(walk);
+        blocks.push("\n");
+      }
+    };
+    fragment.toArray().forEach(walk);
+    return blocks.join("").replace(/\n{3,}/g, "\n\n").trim();
+  } catch {
+    return "";
+  } finally {
+    doc.destroy();
+  }
+}
+
 /** Render plain-text content as escaped paragraph HTML (fallback preview). */
 export function plainTextToHtml(text: string): string {
   const paragraphs = text

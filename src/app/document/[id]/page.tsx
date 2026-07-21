@@ -63,6 +63,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const [showShare, setShowShare] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
+  const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
 
   const yDoc = useMemo(() => new Y.Doc(), []);
   const canEdit = document?.userRole === "owner" || document?.userRole === "editor";
@@ -164,16 +165,20 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const createVersion = async () => {
     setSavingVersion(true);
     try {
-      // Push latest state first
-      await pushToServer();
+      // Capture the client's live Yjs state — the database copy lags behind
+      // the editor because the WebSocket server persists on a debounce.
+      const state = await pushToServer();
 
       const res = await createVersionAction(id, {
         description: `Manual snapshot`,
         title: title,
+        state,
       });
 
       if (res.ok) {
         setShowVersions(true);
+        // Force the panel to re-fetch if it is already open.
+        setVersionsRefreshKey((k) => k + 1);
       }
     } catch (error) {
       console.error("Failed to create version:", error);
@@ -379,6 +384,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <VersionPanel
             documentId={id}
             canEdit={canEdit || false}
+            refreshKey={versionsRefreshKey}
             onClose={() => setShowVersions(false)}
             onRestore={(html) => {
               // Apply the restored content to the live editor. This mutates the

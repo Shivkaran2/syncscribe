@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,10 +22,15 @@ export default function LandingPage() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  if (session) {
-    router.push("/dashboard");
-    return null;
-  }
+  // Redirect in an effect, not during render — navigating mid-render updates
+  // the Router while this component is rendering, which React disallows.
+  useEffect(() => {
+    if (session) {
+      router.push("/dashboard");
+    }
+  }, [session, router]);
+
+  if (session) return null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>

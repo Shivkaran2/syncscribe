@@ -72,9 +72,17 @@ export function useSyncEngine({ documentId, yDoc, canEdit }: UseSyncEngineOption
     };
   }, [documentId, yDoc, canEdit]);
 
-  // Expose manual push (handled automatically by provider, but good for UI triggers)
-  const pushToServer = async () => {
-    // handled automatically by provider
+  // Live edits reach the server through the provider on a debounce, so the
+  // database copy can lag behind what the user sees. For point-in-time actions
+  // (like taking a version snapshot) return the client's authoritative state
+  // encoded as base64 so the caller can send it along explicitly.
+  const pushToServer = async (): Promise<string> => {
+    const state = Y.encodeStateAsUpdate(yDoc);
+    let binary = "";
+    for (let i = 0; i < state.length; i++) {
+      binary += String.fromCharCode(state[i]);
+    }
+    return btoa(binary);
   };
 
   return {

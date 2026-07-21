@@ -6,6 +6,7 @@ import { createVersionSchema } from "@/lib/validators";
 import { getAccessRole, canEditRole } from "@/lib/documentAccess";
 import {
   yDocSnapshotToHtml,
+  yDocSnapshotToPlainText,
   plainTextToHtml,
 } from "@/lib/versionHtml";
 import type { ActionResult } from "@/lib/actions/types";
@@ -45,9 +46,14 @@ export async function listVersions(
 }
 
 // Create a version snapshot from the document's current state (editor only).
+//
+// `input.state` is the client's live Yjs state (base64). It is preferred over
+// the stored `yDocState` because live edits only reach the database on the
+// WebSocket server's debounce, so the stored copy can still be empty/stale at
+// the moment the user asks for a snapshot.
 export async function createVersion(
   documentId: string,
-  input: { title?: string; description?: string }
+  input: { title?: string; description?: string; state?: string }
 ): Promise<ActionResult<DocumentVersion>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "Unauthorized" };
@@ -76,13 +82,25 @@ export async function createVersion(
   });
   const nextVersionNumber = (latestVersion?.versionNumber ?? 0) + 1;
 
+  // Prefer the client's live state; fall back to whatever the server has.
+  const clientState = input.state ? Buffer.from(input.state, "base64") : null;
+  const snapshot =
+    clientState && clientState.length > 0
+      ? clientState
+      : doc.yDocState || Buffer.from([]);
+
+  // Derive plaintext from the snapshot so `content` reflects this version
+  // (the WebSocket store path only writes yDocState, leaving it stale).
+  const snapshotText = yDocSnapshotToPlainText(new Uint8Array(snapshot));
+  const content = snapshotText || doc.content;
+
   const version = await prisma.documentVersion.create({
     data: {
       documentId,
       versionNumber: nextVersionNumber,
       title: parsed.data.title || doc.title,
-      yDocSnapshot: doc.yDocState || Buffer.from([]),
-      content: doc.content,
+      yDocSnapshot: snapshot,
+      content,
       createdBy: session.user.id,
       description: parsed.data.description || `Version ${nextVersionNumber}`,
     },

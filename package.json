@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "wsserver": "tsx hocuspocus/server.ts"
+    "wsserver": "tsx --env-file=.env hocuspocus/server.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.0",

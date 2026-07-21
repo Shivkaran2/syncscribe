@@ -14,13 +14,16 @@ import {
 interface VersionPanelProps {
   documentId: string;
   canEdit: boolean;
+  // Bumped by the parent whenever a new snapshot is saved, so the already-open
+  // panel re-fetches instead of showing a stale list.
+  refreshKey?: number;
   onClose: () => void;
   // Receives the restored version's HTML so the caller can apply it to the
   // live editor (which propagates the change through Yjs to the server).
   onRestore: (html: string) => void;
 }
 
-export default function VersionPanel({ documentId, canEdit, onClose, onRestore }: VersionPanelProps) {
+export default function VersionPanel({ documentId, canEdit, refreshKey = 0, onClose, onRestore }: VersionPanelProps) {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export default function VersionPanel({ documentId, canEdit, onClose, onRestore }
       finally { setLoading(false); }
     };
     fetchVersions();
-  }, [documentId]);
+  }, [documentId, refreshKey]);
 
   const openPreview = async (versionId: string) => {
     setPreviewId(versionId);
@@ -70,7 +73,12 @@ export default function VersionPanel({ documentId, canEdit, onClose, onRestore }
     setRestoring(versionId);
     try {
       const res = await restoreVersionAction(documentId, versionId);
-      if (res.ok) onRestore(res.data.html);
+      if (res.ok) {
+        onRestore(res.data.html);
+        // Restoring also creates an auto-save version — reload the list.
+        const refreshed = await listVersions(documentId);
+        if (refreshed.ok) setVersions(refreshed.data);
+      }
     } catch (e) { console.error(e); }
     finally { setRestoring(null); }
   };
